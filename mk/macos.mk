@@ -13,7 +13,6 @@ rel: clean
 	$(CC) -o bin/warpd-arm $(CFILES) $(OBJCFILES) -target arm64-apple-macos $(CFLAGS) $(RELFLAGS)
 	$(CC) -o bin/warpd-x86  $(CFILES) $(OBJCFILES) -target x86_64-apple-macos $(CFLAGS) $(RELFLAGS)
 	lipo -create bin/warpd-arm bin/warpd-x86 -output bin/warpd && rm -r bin/warpd-*
-	./codesign/sign.sh
 	-rm -rf tmp dist
 	mkdir tmp dist
 	DESTDIR=tmp make install
