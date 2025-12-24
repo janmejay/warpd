@@ -9,7 +9,6 @@ RELFLAGS=-Wl,-adhoc_codesign -framework cocoa -framework carbon -framework Appli
 all: $(OBJECTS)
 	-mkdir bin
 	$(CC) -o bin/warpd $(OBJECTS) -framework cocoa -framework carbon -framework ApplicationServices
-	./codesign/sign.sh
 rel: clean
 	$(CC) -o bin/warpd-arm $(CFILES) $(OBJCFILES) -target arm64-apple-macos $(CFLAGS) $(RELFLAGS)
 	$(CC) -o bin/warpd-x86  $(CFILES) $(OBJCFILES) -target x86_64-apple-macos $(CFLAGS) $(RELFLAGS)
