@@ -6,6 +6,14 @@
 
 #include "warpd.h"
 
+#define DEBUG_PRINT(...) do { \
+	extern int warpd_debug_enabled; \
+	if (warpd_debug_enabled) { \
+		fprintf(stderr, __VA_ARGS__); \
+		fflush(stderr); \
+	} \
+} while(0)
+
 static int grid_width;
 static int grid_height;
 static screen_t scr;
@@ -86,6 +94,7 @@ struct input_event *grid_mode()
 	const int nc = config_get_int("grid_nc");
 	const int nr = config_get_int("grid_nr");
 
+	DEBUG_PRINT("[GRID] Entering grid mode\n");
 	platform->input_grab_keyboard();
 	platform->mouse_hide();
 	mouse_reset();
@@ -126,6 +135,11 @@ struct input_event *grid_mode()
 
 		ev = platform->input_next_event(10);
 		platform->mouse_get_position(NULL, &mx, &my);
+
+		if (ev) {
+			DEBUG_PRINT("[GRID] Received event: code=%d mods=%d pressed=%d\n", 
+				    ev->code, ev->mods, ev->pressed);
+		}
 
 		if (mouse_process_key(ev, "grid_up", "grid_down", "grid_left", "grid_right")) {
 			redraw(mx, my, 0);
@@ -197,6 +211,7 @@ struct input_event *grid_mode()
 	}
 
 exit:
+	DEBUG_PRINT("[GRID] Exiting grid mode\n");
 	config_input_whitelist(NULL, 0);
 	platform->screen_clear(scr);
 	platform->mouse_show();

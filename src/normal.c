@@ -6,6 +6,14 @@
 
 #include "warpd.h"
 
+#define DEBUG_PRINT(...) do { \
+	extern int warpd_debug_enabled; \
+	if (warpd_debug_enabled) { \
+		fprintf(stderr, __VA_ARGS__); \
+		fflush(stderr); \
+	} \
+} while(0)
+
 static void redraw(screen_t scr, int x, int y, int hide_cursor)
 {
 	int sw, sh;
@@ -93,6 +101,7 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 		"up",
 	};
 
+	DEBUG_PRINT("[NORMAL] Entering normal mode, oneshot=%d\n", oneshot);
 	platform->input_grab_keyboard();
 
 	platform->mouse_get_position(&scr, &mx, &my);
@@ -114,6 +123,11 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 		} else {
 			ev = start_ev;
 			start_ev = NULL;
+		}
+
+		if (ev) {
+			DEBUG_PRINT("[NORMAL] Received event: code=%d mods=%d pressed=%d\n", 
+				    ev->code, ev->mods, ev->pressed);
 		}
 
 		platform->mouse_get_position(&scr, &mx, &my);
@@ -250,6 +264,7 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 	}
 
 exit:
+	DEBUG_PRINT("[NORMAL] Exiting normal mode\n");
 	platform->mouse_show();
 	platform->screen_clear(scr);
 

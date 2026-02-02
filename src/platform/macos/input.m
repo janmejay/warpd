@@ -20,6 +20,25 @@ static CFMachPortRef tap;
 uint8_t active_mods = 0;
 pthread_mutex_t keymap_mtx = PTHREAD_MUTEX_INITIALIZER;
 
+#define DEBUG_PRINT(...) do { \
+	extern int warpd_debug_enabled; \
+	if (warpd_debug_enabled) { \
+		fprintf(stderr, __VA_ARGS__); \
+		fflush(stderr); \
+	} \
+} while(0)
+
+static const char *modstr(uint8_t mods)
+{
+	static char buf[64];
+	buf[0] = 0;
+	if (mods & PLATFORM_MOD_CONTROL) strcat(buf, "C-");
+	if (mods & PLATFORM_MOD_SHIFT) strcat(buf, "S-");
+	if (mods & PLATFORM_MOD_META) strcat(buf, "M-");
+	if (mods & PLATFORM_MOD_ALT) strcat(buf, "A-");
+	return buf;
+}
+
 static struct {
 	char name[32];
 	char shifted_name[32];
@@ -85,13 +104,20 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 	uint8_t pressed = 0;
 	uint8_t mods = 0;
 
-	static uint8_t keymods[256] = {0}; /* Mods active at key down time. */
+	static uint8_t keymods[256] = {0};
 	static long pressed_timestamps[256];
+	static int event_counter = 0;
 
-	/* macOS will timeout the event tap, so we have to re-enable it :/ */
 	if (type == kCGEventTapDisabledByTimeout) {
+		DEBUG_PRINT("[INPUT] Event tap disabled by timeout, re-enabling\n");
 		CGEventTapEnable(tap, true);
 		return event;
+	}
+
+	event_counter++;
+	if (event_counter % 50 == 0) {
+		DEBUG_PRINT("[INPUT] State: grabbed=%d active_mods=%d(%s) grabbed_keys_sz=%zu event_count=%d\n",
+			    grabbed, active_mods, modstr(active_mods), grabbed_keys_sz, event_counter);
 	}
 
 	/* If only apple designed its system APIs like its macbooks... */
@@ -158,10 +184,10 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 
 	if (passthrough_keys[code]) {
 		passthrough_keys[code]--;
+		DEBUG_PRINT("[INPUT] Passthrough key code=%d pressed=%d\n", code, pressed);
 		return event;
 	}
 
-	/* Compute the active mod set. */
 	for (i = 0; i < sizeof modifiers / sizeof modifiers[0]; i++) {
 		struct mod *mod = &modifiers[i];
 
@@ -173,7 +199,6 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 		}
 	}
 
-	/* Ensure mods are consistent across keydown/up events. */
 	if (pressed == 0) {
 		mods = keymods[code];
 	} else if (pressed == 1) {
@@ -187,6 +212,13 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 	ev.pressed = pressed;
 	ev.mods = mods;
 
+	const char *key_name = osx_input_lookup_name(code, 0);
+	DEBUG_PRINT("[INPUT] Event: %s%s%s code=%d pressed=%d mods=%d(%s) active_mods=%d(%s) grabbed=%d\n", 
+		    pressed ? "↓" : "↑",
+		    key_name ? " " : "",
+		    key_name ? key_name : "",
+		    code, pressed, mods, modstr(mods), active_mods, modstr(active_mods), grabbed);
+
 	write_message(input_fds[1], &ev, sizeof ev);
 
 	for (i = 0; i < grabbed_keys_sz; i++)
@@ -194,15 +226,17 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 		    grabbed_keys[i].mods == active_mods) {
 			grabbed = 1;
 			grabbed_time = get_time_ms();
+			DEBUG_PRINT("[INPUT] Activation key matched, grabbing. code=%d mods=%d\n", code, active_mods);
 			return nil;
 		}
 
 	if (grabbed) {
-		/* If the keydown occurred before the grab, allow the keyup to pass through. */
 		if (pressed || pressed_timestamps[code] > grabbed_time) {
+			DEBUG_PRINT("[INPUT] Grabbed, suppressing event. code=%d pressed=%d\n", code, pressed);
 			return nil;
 		}
 	}
+	DEBUG_PRINT("[INPUT] Passing through event. code=%d pressed=%d grabbed=%d\n", code, pressed, grabbed);
 	return event;
 }
 
@@ -281,6 +315,7 @@ void send_key(uint8_t code, int pressed)
 void osx_input_ungrab_keyboard()
 {
 	dispatch_sync(dispatch_get_main_queue(), ^{
+		DEBUG_PRINT("[INPUT] Ungrabbing keyboard. grabbed was=%d\n", grabbed);
 		grabbed = 0;
 	});
 }
@@ -291,6 +326,7 @@ void osx_input_grab_keyboard()
 		return;
 
 	dispatch_sync(dispatch_get_main_queue(), ^{
+		DEBUG_PRINT("[INPUT] Grabbing keyboard\n");
 		grabbed = 1;
 		grabbed_time = get_time_ms();
 	});
@@ -300,12 +336,16 @@ struct input_event *osx_input_next_event(int timeout)
 {
 	static struct input_event ev;
 
-	if (read_message(input_fds[0], &ev, sizeof ev, timeout) < 0)
+	if (read_message(input_fds[0], &ev, sizeof ev, timeout) < 0) {
 		return 0;
+	}
 
-	if (ev.code == 0 && ev.mods == 0)
+	if (ev.code == 0 && ev.mods == 0) {
+		DEBUG_PRINT("[INPUT] Next event returned NULL (interrupt)\n");
 		return NULL;
+	}
 
+	DEBUG_PRINT("[INPUT] Next event: code=%d mods=%d pressed=%d\n", ev.code, ev.mods, ev.pressed);
 	return &ev;
 }
 
@@ -314,16 +354,27 @@ struct input_event *osx_input_wait(struct input_event *keys, size_t sz)
 	grabbed_keys = keys;
 	grabbed_keys_sz = sz;
 
+	DEBUG_PRINT("[INPUT] Waiting for %zu activation keys:\n", sz);
+	for (size_t i = 0; i < sz; i++) {
+		DEBUG_PRINT("[INPUT]   key[%zu]: code=%d mods=%d\n", i, keys[i].code, keys[i].mods);
+	}
+
 	while (1) {
 		size_t i;
 		struct input_event *ev = osx_input_next_event(0);
 
-		if (ev == NULL)
+		if (ev == NULL) {
+			DEBUG_PRINT("[INPUT] Wait interrupted (config reload)\n");
 			return NULL;
+		}
+
+		DEBUG_PRINT("[INPUT] Wait received event: code=%d mods=%d pressed=%d\n", 
+			    ev->code, ev->mods, ev->pressed);
 
 		for (i = 0; i < sz; i++)
 			if (ev->pressed && keys[i].code == ev->code &&
 			    keys[i].mods == ev->mods) {
+				DEBUG_PRINT("[INPUT] Activation key matched at index %zu\n", i);
 				grabbed_keys = NULL;
 				grabbed_keys_sz = 0;
 

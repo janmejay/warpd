@@ -10,6 +10,8 @@ struct platform *platform = NULL;
 
 static const char *config_path;
 
+int warpd_debug_enabled = 0;
+
 uint64_t get_time_us()
 {
 	struct timespec ts;
@@ -113,6 +115,7 @@ static void print_usage()
 		"  -c, --config <config file>  Use the supplied config file.\n"
 		"  -l, --list-keys             Print all valid keys.\n"
 		"  --list-options              Print all available config options.\n"
+		"  -d, --debug                 Enable debug output to stderr.\n"
 
 		"  --hint                      Start warpd in hint mode and exit after the end of the session.\n"
 		"  --hint2                     Start warpd in two pass hint mode and exit after the end of the session.\n"
@@ -210,6 +213,9 @@ int main(int argc, char *argv[])
 	int foreground = 0;
 	config_path = get_config_path("config");
 
+	if (getenv("WARPD_DEBUG"))
+		warpd_debug_enabled = 1;
+
 	struct option opts[] = {
 		{"version", no_argument, NULL, 'v'},
 		{"help", no_argument, NULL, 'h'},
@@ -217,6 +223,7 @@ int main(int argc, char *argv[])
 		{"list-keys", no_argument, NULL, 'l'},
 		{"foreground", no_argument, NULL, 'f'},
 		{"config", required_argument, NULL, 'c'},
+		{"debug", no_argument, NULL, 'd'},
 
 		{"hint", no_argument, NULL, 257},
 		{"grid", no_argument, NULL, 258},
@@ -233,7 +240,7 @@ int main(int argc, char *argv[])
 		{0}
 	};
 
-	while ((c = getopt_long(argc, argv, "qrhfvlc:", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "qrhfvlc:d", opts, NULL)) != -1) {
 		switch (c) {
 			case 'v':
 				print_version();
@@ -249,6 +256,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'f':
 				foreground = 1;
+				break;
+			case 'd':
+				warpd_debug_enabled = 1;
 				break;
 			case 'q':
 				mode = MODE_HINTSPEC;

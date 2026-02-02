@@ -52,6 +52,8 @@
 	typedef int ssize_t;
 #endif
 
+extern int warpd_debug_enabled;
+
 enum {
 	MODE_RESERVED,
 
