@@ -222,7 +222,7 @@ static CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type,
 	write_message(input_fds[1], &ev, sizeof ev);
 
 	for (i = 0; i < grabbed_keys_sz; i++)
-		if (grabbed_keys[i].code == code &&
+		if (pressed && grabbed_keys[i].code == code &&
 		    grabbed_keys[i].mods == active_mods) {
 			grabbed = 1;
 			grabbed_time = get_time_ms();
