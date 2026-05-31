@@ -39,6 +39,23 @@ struct hint {
 	char label[16];
 };
 
+struct focused_window {
+	char bundle_id[128];
+	char app_name[128];
+};
+
+struct screen_info {
+	char uuid[64];
+	char name[128];
+	int index;
+	int total;
+	int is_primary;
+	int x;
+	int y;
+	int w;
+	int h;
+};
+
 struct screen;
 typedef struct screen *screen_t;
 
@@ -86,6 +103,21 @@ struct platform {
 	void (*hint_draw)(struct screen *scr, struct hint *hints, size_t n);
 
 	void (*scroll)(int direction);
+
+	/*
+	 * Populate `out` with information about the frontmost application's
+	 * focused window. On platforms where this is not implemented, fills
+	 * bundle_id and app_name with "unknown".
+	 */
+	void (*get_focused_window)(struct focused_window *out);
+
+	/*
+	 * Populate `out` with stable identity + geometry for the given screen.
+	 * uuid persists across reboots and reconnects (CGDisplayCreateUUIDFromDisplayID
+	 * on macOS). On platforms where the stable id is unavailable, uuid and
+	 * name are set to "unknown" and geometry is filled from screen_get_dimensions.
+	 */
+	void (*screen_get_info)(screen_t scr, struct screen_info *out);
 
 	void (*copy_selection)();
 

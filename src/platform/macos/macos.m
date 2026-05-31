@@ -186,6 +186,8 @@ static void *mainloop(void *arg)
 		.screen_list = osx_screen_list,
 		.scroll = osx_scroll,
 		.monitor_file = osx_monitor_file,
+		.get_focused_window = osx_get_focused_window,
+		.screen_get_info = osx_screen_get_info,
 	};
 
 	main(&platform);

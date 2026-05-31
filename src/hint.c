@@ -5,14 +5,13 @@
  */
 
 #include "warpd.h"
+#include "action_log.h"
 
 struct hint *hints;
 struct hint matched[MAX_HINTS];
 
 static size_t nr_hints;
 static size_t nr_matched;
-
-char last_selected_hint[32];
 
 static void filter(screen_t scr, const char *s)
 {
@@ -95,10 +94,20 @@ static size_t generate_fullscreen_hints(screen_t scr, struct hint *hints)
 	return n;
 }
 
-static int hint_selection(screen_t scr, struct hint *_hints, size_t _nr_hints)
+static int hint_selection(screen_t scr, struct hint *_hints, size_t _nr_hints,
+			  char *out_label, size_t out_sz)
 {
 	hints = _hints;
 	nr_hints = _nr_hints;
+
+	if (out_label && out_sz)
+		out_label[0] = 0;
+
+	{
+		int vw = 0, vh = 0;
+		platform->screen_get_dimensions(scr, &vw, &vh);
+		action_log_hint_present(MODE_HINT, _hints, _nr_hints, vw, vh);
+	}
 
 	filter(scr, "");
 
@@ -163,7 +172,10 @@ static int hint_selection(screen_t scr, struct hint *_hints, size_t _nr_hints)
 			platform->mouse_move(scr, nx+1, ny+1);
 
 			platform->mouse_move(scr, nx, ny);
-			strcpy(last_selected_hint, buf);
+			if (out_label && out_sz) {
+				strncpy(out_label, buf, out_sz - 1);
+				out_label[out_sz - 1] = 0;
+			}
 			break;
 		} else if (nr_matched == 0) {
 			break;
@@ -178,7 +190,7 @@ static int hint_selection(screen_t scr, struct hint *_hints, size_t _nr_hints)
 	return rc;
 }
 
-static int sift()
+static int sift(char *out_label, size_t out_sz)
 {
 	int gap = config_get_int("hint2_gap_size");
 	int hint_sz = config_get_int("hint2_size");
@@ -224,7 +236,7 @@ static int sift()
 			}
 	}
 
-	return hint_selection(scr, hints, n);
+	return hint_selection(scr, hints, n, out_label, out_sz);
 }
 
 void init_hints()
@@ -235,7 +247,7 @@ void init_hints()
 			    config_get("hint_font"));
 }
 
-int hintspec_mode()
+int hintspec_mode(char *out_label, size_t out_sz)
 {
 	screen_t scr;
 	int sw, sh;
@@ -262,10 +274,10 @@ int hintspec_mode()
 		n++;
 	}
 
-	return hint_selection(scr, hints, n);
+	return hint_selection(scr, hints, n, out_label, out_sz);
 }
 
-int full_hint_mode(int second_pass)
+int full_hint_mode(int second_pass, char *out_label, size_t out_sz)
 {
 	int mx, my;
 	screen_t scr;
@@ -276,16 +288,16 @@ int full_hint_mode(int second_pass)
 
 	nr_hints = generate_fullscreen_hints(scr, hints);
 
-	if (hint_selection(scr, hints, nr_hints))
+	if (hint_selection(scr, hints, nr_hints, out_label, out_sz))
 		return -1;
 
 	if (second_pass)
-		return sift();
+		return sift(out_label, out_sz);
 	else
 		return 0;
 }
 
-int history_hint_mode()
+int history_hint_mode(char *out_label, size_t out_sz)
 {
 	struct hint hints[MAX_HINTS];
 	struct histfile_ent *ents;
@@ -312,5 +324,5 @@ int history_hint_mode()
 		hints[i].label[1] = 0;
 	}
 
-	return hint_selection(scr, hints, n);
+	return hint_selection(scr, hints, n, out_label, out_sz);
 }

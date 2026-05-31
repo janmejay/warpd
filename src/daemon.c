@@ -1,4 +1,5 @@
 #include "warpd.h"
+#include "action_log.h"
 
 #define DEBUG_PRINT(...) do { \
 	extern int warpd_debug_enabled; \
@@ -33,6 +34,7 @@ static void reload_config(const char *path)
 	for (i = 0; i < sizeof activation_keys / sizeof activation_keys[0]; i++)
 		input_parse_string(&activation_events[i], config_get(activation_keys[i]));
 
+	action_log_reload();
 }
 
 void daemon_loop(const char *config_path)
@@ -88,15 +90,18 @@ void daemon_loop(const char *config_path)
 		}
 		else if (config_input_match(ev, "hint2_oneshot_key")) {
 			DEBUG_PRINT("[DAEMON] Hint2 oneshot key\n");
-			full_hint_mode(1);
+			action_log_mode_enter(MODE_HINT2);
+			full_hint_mode(1, NULL, 0);
 			continue;
 		} else if (config_input_match(ev, "hint_oneshot_key")) {
 			DEBUG_PRINT("[DAEMON] Hint oneshot key\n");
-			full_hint_mode(0);
+			action_log_mode_enter(MODE_HINT);
+			full_hint_mode(0, NULL, 0);
 			continue;
 		} else if (config_input_match(ev, "history_oneshot_key")) {
 			DEBUG_PRINT("[DAEMON] History oneshot key\n");
-			history_hint_mode();
+			action_log_mode_enter(MODE_HISTORY);
+			history_hint_mode(NULL, 0);
 			continue;
 		}
 

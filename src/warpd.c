@@ -5,6 +5,7 @@
  */
 
 #include "warpd.h"
+#include "action_log.h"
 
 struct platform *platform = NULL;
 
@@ -156,24 +157,44 @@ int oneshot_main(struct platform *_platform)
 	parse_config(config_path);
 	init_mouse();
 	init_hints();
+	action_log_init();
 
 	platform->mouse_get_position(&scr, NULL, NULL);
 	if (x_flag == -1 && y_flag == -1) {
-		if (drag_flag)
+		if (drag_flag) {
+			int dx, dy;
+			screen_t ds;
+			platform->mouse_get_position(&ds, &dx, &dy);
 			platform->mouse_down(config_get_int("drag_button"));
+			action_log_click(MODE_NORMAL, "cli", NULL,
+					 dx, dy, dx, dy, NULL, "drag_press");
+		}
 
 		ret = mode_loop(mode, oneshot_flag, record_flag);
 
-		if (drag_flag)
+		if (drag_flag) {
+			int dx, dy;
+			screen_t ds;
+			platform->mouse_get_position(&ds, &dx, &dy);
 			platform->mouse_up(config_get_int("drag_button"));
+			action_log_click(MODE_NORMAL, "cli", NULL,
+					 dx, dy, dx, dy, NULL, "drag_release");
+		}
 
 	} else {
 		platform->mouse_move(scr, x_flag, y_flag);
 	}
 
-	if (click_flag)
+	if (click_flag) {
+		int cx, cy;
+		screen_t cs;
+		platform->mouse_get_position(&cs, &cx, &cy);
 		platform->mouse_click(click_flag);
+		action_log_click(MODE_NORMAL, "cli", NULL,
+				 cx, cy, cx, cy, NULL, "click");
+	}
 
+	action_log_close();
 	return ret;
 }
 
@@ -184,9 +205,11 @@ int daemon_main(struct platform *_platform)
 	parse_config(config_path);
 	init_mouse();
 	init_hints();
+	action_log_init();
 
 	daemon_loop(config_path);
 
+	action_log_close();
 	return 0;
 }
 

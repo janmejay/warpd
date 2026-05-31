@@ -205,6 +205,31 @@ static void cleanup()
 	wl_display_flush(wl.dpy);
 }
 
+extern void warpd_warn_once(const char *fn);
+
+static void way_get_focused_window(struct focused_window *out)
+{
+	warpd_warn_once("get_focused_window");
+	memset(out, 0, sizeof(*out));
+	strncpy(out->bundle_id, "unknown", sizeof(out->bundle_id) - 1);
+	strncpy(out->app_name, "unknown", sizeof(out->app_name) - 1);
+}
+
+static void way_screen_get_info(screen_t scr, struct screen_info *out)
+{
+	int w = 0, h = 0;
+	warpd_warn_once("screen_get_info");
+	memset(out, 0, sizeof(*out));
+	way_screen_get_dimensions(scr, &w, &h);
+	out->w = w;
+	out->h = h;
+	out->index = 0;
+	out->total = 1;
+	out->is_primary = 1;
+	strncpy(out->uuid, "unknown", sizeof(out->uuid) - 1);
+	strncpy(out->name, "unknown", sizeof(out->name) - 1);
+}
+
 void wayland_init(struct platform *platform)
 {
 	way_init();
@@ -235,4 +260,6 @@ void wayland_init(struct platform *platform)
 	platform->screen_get_dimensions = way_screen_get_dimensions;
 	platform->screen_list = way_screen_list;
 	platform->scroll = way_scroll;
+	platform->get_focused_window = way_get_focused_window;
+	platform->screen_get_info = way_screen_get_info;
 }

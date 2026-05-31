@@ -1,4 +1,5 @@
 #include "warpd.h"
+#include "action_log.h"
 
 #define DEBUG_PRINT(...) do { \
 	extern int warpd_debug_enabled; \
@@ -8,11 +9,30 @@
 	} \
 } while(0)
 
+static void trace_append(char *trace, size_t sz, const char *m)
+{
+	size_t len = strlen(trace);
+	if (len) {
+		if (len + 1 >= sz) return;
+		trace[len++] = ',';
+		trace[len] = 0;
+	}
+	strncat(trace, m, sz - strlen(trace) - 1);
+}
+
 int mode_loop(int initial_mode, int oneshot, int record_history)
 {
 	int mode = initial_mode;
 	int rc = 0;
 	struct input_event *ev = NULL;
+	char selected_hint[32] = "";
+	char mode_trace[64] = "";
+	int start_x = 0, start_y = 0;
+	int clicked = 0;
+	(void)start_x; (void)start_y; (void)mode_trace; (void)clicked;
+
+	platform->mouse_get_position(NULL, &start_x, &start_y);
+	action_log_mode_enter(initial_mode);
 
 	const char *mode_names[] = {
 		[MODE_RESERVED] = "RESERVED",
@@ -37,7 +57,8 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 		switch (mode) {
 		case MODE_HISTORY:
 			DEBUG_PRINT("[MODE] Executing HISTORY mode\n");
-			if (history_hint_mode() < 0)
+			trace_append(mode_trace, sizeof mode_trace, "history");
+			if (history_hint_mode(selected_hint, sizeof selected_hint) < 0)
 				goto exit;
 
 			ev = NULL;
@@ -45,11 +66,15 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 			break;
 		case MODE_HINTSPEC:
 			DEBUG_PRINT("[MODE] Executing HINTSPEC mode\n");
-			hintspec_mode();
+			trace_append(mode_trace, sizeof mode_trace, "hintspec");
+			hintspec_mode(selected_hint, sizeof selected_hint);
 			break;
 		case MODE_NORMAL:
 			DEBUG_PRINT("[MODE] Executing NORMAL mode\n");
-			ev = normal_mode(ev, oneshot);
+			trace_append(mode_trace, sizeof mode_trace, "normal");
+			ev = normal_mode(ev, oneshot,
+					 selected_hint[0] ? selected_hint : NULL);
+			selected_hint[0] = 0;
 
 			if (config_input_match(ev, "history")) {
 				DEBUG_PRINT("[MODE] Transitioning to HISTORY mode\n");
@@ -85,7 +110,10 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 		case MODE_HINT2:
 		case MODE_HINT:
 			DEBUG_PRINT("[MODE] Executing HINT mode (pass=%d)\n", mode == MODE_HINT2 ? 2 : 1);
-			if (full_hint_mode(mode == MODE_HINT2) < 0)
+			trace_append(mode_trace, sizeof mode_trace,
+				     mode == MODE_HINT2 ? "hint2" : "hint");
+			if (full_hint_mode(mode == MODE_HINT2,
+					   selected_hint, sizeof selected_hint) < 0)
 				goto exit;
 
 			ev = NULL;
@@ -93,6 +121,7 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 			break;
 		case MODE_GRID:
 			DEBUG_PRINT("[MODE] Executing GRID mode\n");
+			trace_append(mode_trace, sizeof mode_trace, "grid");
 			ev = grid_mode();
 			if (config_input_match(ev, "grid_exit"))
 				ev = NULL;
@@ -100,6 +129,7 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 			break;
 		case MODE_SCREEN_SELECTION:
 			DEBUG_PRINT("[MODE] Executing SCREEN_SELECTION mode\n");
+			trace_append(mode_trace, sizeof mode_trace, "screen");
 			screen_selection_mode();
 			mode = MODE_NORMAL;
 			ev = NULL;
@@ -116,8 +146,14 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 			if (record_history)
 				histfile_add(x, y);
 
+			action_log_click(initial_mode, mode_trace, ev,
+					 x, y, start_x, start_y,
+					 selected_hint[0] ? selected_hint : NULL,
+					 "click");
+			clicked = 1;
+
 			if (mode == MODE_HINTSPEC)
-				printf("%d %d %s\n", x, y, last_selected_hint);
+				printf("%d %d %s\n", x, y, selected_hint);
 			else
 				printf("%d %d\n", x, y);
 
@@ -126,6 +162,8 @@ int mode_loop(int initial_mode, int oneshot, int record_history)
 	}
 
 exit:
+	if (!clicked)
+		action_log_mode_abort(initial_mode, "exit");
 	DEBUG_PRINT("[MODE] Exiting mode_loop with rc=%d\n", rc);
 	return rc;
 }

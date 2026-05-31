@@ -441,6 +441,39 @@ static void commit()
 	wn_screen_redraw(scr);
 }
 
+static void wn_warn_once(const char *fn)
+{
+	static const char *seen[32];
+	static int n = 0;
+	for (int i = 0; i < n; i++)
+		if (seen[i] == fn) return;
+	if (n < 32) seen[n++] = fn;
+	fprintf(stderr, "WARN: %s not implemented on this platform\n", fn);
+}
+
+static void wn_get_focused_window(struct focused_window *out)
+{
+	wn_warn_once("get_focused_window");
+	memset(out, 0, sizeof(*out));
+	strncpy(out->bundle_id, "unknown", sizeof(out->bundle_id) - 1);
+	strncpy(out->app_name, "unknown", sizeof(out->app_name) - 1);
+}
+
+static void wn_screen_get_info(screen_t scr, struct screen_info *out)
+{
+	int w = 0, h = 0;
+	wn_warn_once("screen_get_info");
+	memset(out, 0, sizeof(*out));
+	screen_get_dimensions(scr, &w, &h);
+	out->w = w;
+	out->h = h;
+	out->index = 0;
+	out->total = 1;
+	out->is_primary = 1;
+	strncpy(out->uuid, "unknown", sizeof(out->uuid) - 1);
+	strncpy(out->name, "unknown", sizeof(out->name) - 1);
+}
+
 void platform_run(int (*main)(struct platform *platform))
 {
 	SetWindowsHookEx(WH_KEYBOARD_LL, keyboardHook, GetModuleHandle(NULL), 0);
@@ -472,6 +505,8 @@ void platform_run(int (*main)(struct platform *platform))
 	platform.input_lookup_code = input_lookup_code;
 	platform.input_lookup_name = input_lookup_name;
 	platform.monitor_file = wn_monitor_file;
+	platform.get_focused_window = wn_get_focused_window;
+	platform.screen_get_info = wn_screen_get_info;
 
 	exit(main(&platform));
 }

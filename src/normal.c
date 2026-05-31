@@ -5,6 +5,7 @@
  */
 
 #include "warpd.h"
+#include "action_log.h"
 
 #define DEBUG_PRINT(...) do { \
 	extern int warpd_debug_enabled; \
@@ -53,8 +54,21 @@ static void move(screen_t scr, int x, int y, int hide_cursor)
 	redraw(scr, x, y, hide_cursor);
 }
 
-struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
+struct input_event *normal_mode(struct input_event *start_ev, int oneshot,
+				const char *hint_label)
 {
+	char first_click_label[32] = "";
+	if (hint_label) {
+		strncpy(first_click_label, hint_label, sizeof(first_click_label) - 1);
+		first_click_label[sizeof(first_click_label) - 1] = 0;
+	}
+
+	int start_x = 0, start_y = 0;
+	{
+		screen_t s0;
+		platform->mouse_get_position(&s0, &start_x, &start_y);
+	}
+
 	const int cursz = config_get_int("cursor_size");
 	const int system_cursor = config_get_int("normal_system_cursor");
 	const char *blink_interval = config_get("normal_blink_interval");
@@ -205,13 +219,25 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 			move(scr, mx, my, !show_cursor);
 		} else if (config_input_match(ev, "drag")) {
 			dragging = !dragging;
-			if (dragging)
+			if (dragging) {
 				platform->mouse_down(config_get_int("drag_button"));
-			else
+				action_log_click(MODE_NORMAL, "normal", ev,
+						 mx, my, start_x, start_y,
+						 first_click_label[0] ? first_click_label : NULL,
+						 "drag_press");
+				first_click_label[0] = 0;
+			} else {
 				platform->mouse_up(config_get_int("drag_button"));
+				action_log_click(MODE_NORMAL, "normal", ev,
+						 mx, my, start_x, start_y,
+						 NULL, "drag_release");
+			}
 		} else if (config_input_match(ev, "copy_and_exit")) {
 			platform->mouse_up(config_get_int("drag_button"));
 			platform->copy_selection();
+			action_log_click(MODE_NORMAL, "normal", ev,
+					 mx, my, start_x, start_y,
+					 NULL, "copy_and_exit");
 			ev = NULL;
 			goto exit;
 		} else if (config_input_match(ev, "exit") ||
@@ -224,6 +250,10 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 		} else if (config_input_match(ev, "print")) {
 			printf("%d %d %s\n", mx, my, input_event_tostr(ev));
 			fflush(stdout);
+			action_log_click(MODE_NORMAL, "normal", ev,
+					 mx, my, start_x, start_y,
+					 first_click_label[0] ? first_click_label : NULL,
+					 "print");
 		} else { /* Mouse Buttons. */
 			int btn;
 
@@ -236,9 +266,19 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 				hist_add(mx, my);
 				histfile_add(mx, my);
 				platform->mouse_click(btn);
+				action_log_click(MODE_NORMAL, "normal", ev,
+						 mx, my, start_x, start_y,
+						 first_click_label[0] ? first_click_label : NULL,
+						 "click");
+				first_click_label[0] = 0;
 			} else if ((btn = config_input_match(ev, "oneshot_buttons"))) {
 				hist_add(mx, my);
 				platform->mouse_click(btn);
+				action_log_click(MODE_NORMAL, "normal", ev,
+						 mx, my, start_x, start_y,
+						 first_click_label[0] ? first_click_label : NULL,
+						 "click");
+				first_click_label[0] = 0;
 
 				const int timeout = config_get_int("oneshot_timeout");
 
@@ -250,7 +290,13 @@ struct input_event *normal_mode(struct input_event *start_ev, int oneshot)
 
 					if (ev && ev->pressed &&
 						config_input_match(ev, "oneshot_buttons")) {
+						int rx, ry;
+						screen_t rs;
 						platform->mouse_click(btn);
+						platform->mouse_get_position(&rs, &rx, &ry);
+						action_log_click(MODE_NORMAL, "normal", ev,
+								 rx, ry, start_x, start_y,
+								 NULL, "click");
 					}
 				}
 

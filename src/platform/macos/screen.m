@@ -62,6 +62,65 @@ void macos_init_screen()
 		scr->w = screen.frame.size.width;
 		scr->h = screen.frame.size.height;
 
+		NSNumber *num = [screen.deviceDescription objectForKey:@"NSScreenNumber"];
+		scr->display_id = num ? [num unsignedIntValue] : 0;
+
 		scr->overlay = create_overlay_window(scr->x, scr->y, scr->w, scr->h);
+	}
+}
+
+void osx_screen_get_info(struct screen *scr, struct screen_info *out)
+{
+	memset(out, 0, sizeof(*out));
+
+	out->x = scr->x;
+	out->y = scr->y;
+	out->w = scr->w;
+	out->h = scr->h;
+
+	out->index = 0;
+	out->total = (int)nr_screens;
+	out->is_primary = 0;
+	strncpy(out->uuid, "unknown", sizeof(out->uuid) - 1);
+	strncpy(out->name, "unknown", sizeof(out->name) - 1);
+
+	if (scr->display_id == 0)
+		return;
+
+	CGDirectDisplayID active[MAX_SCREENS];
+	uint32_t n_active = 0;
+	if (CGGetActiveDisplayList(MAX_SCREENS, active, &n_active) == kCGErrorSuccess) {
+		out->total = (int)n_active;
+		for (uint32_t i = 0; i < n_active; i++) {
+			if (active[i] == scr->display_id) {
+				out->index = (int)i;
+				break;
+			}
+		}
+	}
+
+	out->is_primary = CGDisplayIsMain(scr->display_id) ? 1 : 0;
+
+	CFUUIDRef uuid = CGDisplayCreateUUIDFromDisplayID(scr->display_id);
+	if (uuid) {
+		CFStringRef cfs = CFUUIDCreateString(NULL, uuid);
+		if (cfs) {
+			CFStringGetCString(cfs, out->uuid, sizeof(out->uuid),
+					   kCFStringEncodingUTF8);
+			CFRelease(cfs);
+		}
+		CFRelease(uuid);
+	}
+
+	for (NSScreen *ns in NSScreen.screens) {
+		NSNumber *num = [ns.deviceDescription objectForKey:@"NSScreenNumber"];
+		if (num && [num unsignedIntValue] == scr->display_id) {
+			NSString *nm = [ns localizedName];
+			if (nm) {
+				strncpy(out->name, nm.UTF8String,
+					sizeof(out->name) - 1);
+			}
+			break;
+		}
 	}
 }

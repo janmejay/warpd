@@ -58,6 +58,8 @@ struct screen {
 	int w;
 	int h;
 
+	CGDirectDisplayID display_id;
+
 	struct hint hints[MAX_HINTS];
 	size_t nr_hints;
 
@@ -122,5 +124,8 @@ void osx_copy_selection();
 void osx_monitor_file(const char *_path);
 void osx_input_interrupt();
 void osx_commit();
+
+void osx_get_focused_window(struct focused_window *out);
+void osx_screen_get_info(screen_t scr, struct screen_info *out);
 
 #endif

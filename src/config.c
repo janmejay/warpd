@@ -119,6 +119,12 @@ static struct {
 
 	{ "normal_system_cursor", "0", "If set to non-zero, use the system cursor instead of warpd's internal one.", OPT_INT },
 	{ "normal_blink_interval", "0", "If set to non-zero, the blink interval of the normal mode cursor in miliseconds. If two values are supplied, the first corresponds to the time the cursor is visible, and the second corresponds to the amount of time it is invisible", OPT_STRING },
+
+	{ "enable_action_log", "0", "If set to non-zero, append JSONL action events to action_log_path for next-click prediction model training.", OPT_INT },
+	{ "action_log_path", "", "Path to the JSONL action log. Empty string means use $XDG_DATA_DIR/warpd/events.jsonl (or ~/.local/share/warpd/events.jsonl).", OPT_STRING },
+	{ "action_log_session_idle_s", "300", "If no event is emitted for this many seconds, mint a fresh session uuid on the next event and reset the per-session sequence counter.", OPT_INT },
+	{ "external_context_cmd", "", "Optional shell command whose first line of stdout is captured as the 'context' field on every event (e.g. 'aerospace list-windows --focused --format \"%{workspace}\"').", OPT_STRING },
+	{ "external_context_timeout_ms", "150", "Maximum time in milliseconds to wait for external_context_cmd before dropping the context for that event.", OPT_INT },
 };
 
 const char *config_get(const char *key)

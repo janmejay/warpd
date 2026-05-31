@@ -89,14 +89,13 @@ struct histfile_ent {
 	int y;
 };
 
-extern char last_selected_hint[32];
-
-int hintspec_mode();
-int history_hint_mode();
-int full_hint_mode(int second_pass);
+int hintspec_mode(char *out_label, size_t out_sz);
+int history_hint_mode(char *out_label, size_t out_sz);
+int full_hint_mode(int second_pass, char *out_label, size_t out_sz);
 void screen_selection_mode();
 struct input_event *grid_mode();
-struct input_event *normal_mode(struct input_event *start_ev, int oneshot);
+struct input_event *normal_mode(struct input_event *start_ev, int oneshot,
+				const char *hint_label);
 
 void init_hints();
 void init_normal_mode();
